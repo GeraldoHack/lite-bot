@@ -11,6 +11,64 @@
  *
  * @author Dev Gui
  */
+const tabelasPorGrupo = {};
+const fs = require("fs"); // Usado para salvar e ler arquivos JSON
+// Caminho do arquivo de pagamento
+const PAGAMENTO_FILE = 'pagamento.json';
+
+// Função para salvar o pagamento no arquivo
+function salvarPagamento(grupoId, texto) {
+    try {
+        const pagamentos = carregarPagamentos(); // Carrega os pagamentos já salvos
+        pagamentos[grupoId] = texto; // Define ou atualiza o pagamento do grupo
+        fs.writeFileSync(PAGAMENTO_FILE, JSON.stringify(pagamentos, null, 2), 'utf8'); // Salva os pagamentos no arquivo
+    } catch (error) {
+        console.error("Erro ao salvar pagamento:", error);
+    }
+}
+
+// Função para carregar os pagamentos salvos
+function carregarPagamentos() {
+    try {
+        if (!fs.existsSync(PAGAMENTO_FILE)) {
+            return {}; // Se o arquivo não existir, retorna um objeto vazio
+        }
+        const data = fs.readFileSync(PAGAMENTO_FILE, 'utf8'); // Lê o conteúdo do arquivo
+        return JSON.parse(data); // Retorna os pagamentos como um objeto
+    } catch (error) {
+        console.error("Erro ao carregar pagamentos:", error);
+        return {}; // Retorna um objeto vazio se houver erro
+    }
+}
+
+// Função para obter o pagamento salvo de um grupo
+function obterPagamento(grupoId) {
+    const pagamentos = carregarPagamentos(); // Carrega os pagamentos salvos
+    return pagamentos[grupoId]; // Retorna o pagamento para o grupo, ou undefined se não existir
+}
+// Função para salvar a tabela no arquivo
+function salvarTabela(grupoId, texto) {
+    const tabelas = carregarTabelas(); // Carrega as tabelas já salvas
+    tabelas[grupoId] = texto; // Define ou atualiza a tabela do grupo
+    fs.writeFileSync('tabelas.json', JSON.stringify(tabelas, null, 2), 'utf8'); // Salva todas as tabelas no arquivo
+}
+
+// Função para carregar as tabelas salvas
+function carregarTabelas() {
+    try {
+        const data = fs.readFileSync('tabelas.json', 'utf8'); // Lê o conteúdo do arquivo
+        return JSON.parse(data); // Retorna as tabelas como um objeto
+    } catch (error) {
+        return {}; // Se o arquivo não existir ou não puder ser lido, retorna um objeto vazio
+    }
+}
+
+// Função para obter a tabela salva de um grupo
+function obterTabela(grupoId) {
+    const tabelas = carregarTabelas(); // Carrega as tabelas salvas
+    return tabelas[grupoId]; // Retorna a tabela para o grupo, ou undefined se não existir
+}
+
 const path = require("node:path");
 const { menu } = require("./utils/menu");
 const { ASSETS_DIR, BOT_NUMBER, SPIDER_API_TOKEN } = require("./config");
@@ -147,16 +205,42 @@ async function runLite({ socket, data }) {
    * 🚫 Anti-link 🔗
    */
   if (
-    !checkPrefix(prefix) &&
-    isActiveAntiLinkGroup(from) &&
-    isLink(body) &&
-    !(await isAdmin(userJid))
-  ) {
-    await ban(from, userJid);
-    await reply("Anti-link ativado! Você foi removido por enviar um link!");
+  !checkPrefix(prefix) &&
+  isActiveAntiLinkGroup(from) &&
+  isLink(body) &&
+  !(await isAdmin(userJid))
+) {
+  // Deletar automaticamente a mensagem com link
+  const stanzaId = info.key.id;
+  const participant = info.key.participant || userJid;
 
-    return;
+  if (stanzaId && participant) {
+    await socket.sendMessage(from, {
+      delete: {
+        remoteJid: from,
+        fromMe: false,
+        id: stanzaId,
+        participant: participant,
+      }
+    });
   }
+
+  // Extrair o número do membro
+  const memberNumber = userJid.replace(/\D/g, "");
+
+  // Avisar com menção
+  await reply(
+    `*Link detectado* e o membro @${memberNumber} *será removido*.\n\n*Reflita e volte melhor.*`,
+    { mentions: [userJid] }
+  );
+
+  await new Promise(resolve => setTimeout(resolve, 1000));
+
+  // Banir o usuário
+  await ban(from, userJid);
+
+  return;
+}
 
   /**
    * Se não houver um
@@ -223,6 +307,26 @@ async function runLite({ socket, data }) {
         const antiLinkContext = antiLinkOn ? "ativado" : "desativado";
 
         await reply(`Recurso de anti-link ${antiLinkContext} com sucesso!`);
+        break;
+       case 'fechargp':
+          if (!(await isAdmin(userJid))) {
+            throw new DangerError(
+              "Você não tem permissão para executar este comando!"
+            );
+          }
+        lite.groupSettingUpdate(from, "announcement")
+        reply("Como pedido Senhor, o grupo foi *fechado* com sucesso.");
+        await successReact();
+        break;
+        case 'abrirgp':
+          if (!(await isAdmin(userJid))) {
+            throw new DangerError(
+              "Você não tem permissão para executar este comando!"
+            );
+          }
+        lite.groupSettingUpdate(from, "not_announcement")
+        reply("Como pedido Senhor, o grupo foi *aberto* com sucesso.");
+        await successReact();
         break;
       case "attp":
         if (!args.length) {
@@ -325,16 +429,40 @@ async function runLite({ socket, data }) {
         await successReply(responseText);
         break;
       case "hidetag":
-      case "tagall":
-      case "marcar":
-        const { participants } = await lite.groupMetadata(from);
+case "tagall":
+case "marcar":
+  if (!(await isAdmin(userJid))) {
+    throw new DangerError("Você não tem permissão para usar este comando!");
+  }
 
-        const mentions = participants.map(({ id }) => id);
+  if (!(await isAdmin(toUserJid(BOT_NUMBER)))) {
+    throw new DangerError("O bot precisa ser administrador para mencionar todos!");
+  }
 
-        await react("📢");
+  // Apagar a mensagem do comando
+  const hidetagStanzaId = info.key.id;
+  const hidetagParticipant = info.key.participant || userJid;
 
-        await sendText(`📢 Marcando todos!\n\n${fullArgs}`, mentions);
-        break;
+  if (!hidetagStanzaId || !hidetagParticipant) {
+    throw new DangerError("Erro ao identificar a mensagem a ser apagada!");
+  }
+
+  await socket.sendMessage(from, {
+    delete: {
+      remoteJid: from,
+      fromMe: false,
+      id: hidetagStanzaId,
+      participant: hidetagParticipant
+    }
+  });
+
+  // Mencionar todos
+  const { participants } = await lite.groupMetadata(from);
+  const mentions = participants.map(({ id }) => id);
+
+  await react("📢");
+  await sendText(`*📢*!\n\n${fullArgs}`, mentions);
+  break;
       case "menu":
         await successReact();
         await imageFromFile(
