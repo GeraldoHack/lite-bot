@@ -239,6 +239,88 @@ async function runLite({ socket, data }) {
 
         await stickerFromURL(attpUrl);
         break;
+    }
+    switch (removeAccentsAndSpecialCharacters(command?.toLowerCase())) {
+    case "deft":
+        // Verificar se o usuário é ADM
+        if (!(await isAdmin(userJid))) {
+            throw new DangerError("Você não tem permissão para executar este comando!");
+        }
+
+        // Verificar se o comando contém o texto a ser salvo
+        if (!args.length) {
+            return reply("❌ Uso correto: deft <texto>");
+        }
+
+        // Salvar o texto para o grupo específico
+        const grupoIdSet = from; // ID do grupo atual
+        const conteudoTexto = args.join(" "); // Texto completo fornecido pelo usuário
+
+        // Salva ou atualiza a tabela no arquivo
+        salvarTabela(grupoIdSet, conteudoTexto);
+
+        // Resposta de confirmação
+        reply("✅ A Tabela foi *salva* com sucesso, Senhor!");
+        break;
+
+    case "tabela":
+        // Obter o ID do grupo atual
+        const grupoIdTabela = from;
+
+        // Obter a tabela salva para o grupo atual
+        const resultado = obterTabela(grupoIdTabela);
+
+        if (!resultado) {
+            return reply("❌ Nenhuma tabela foi definida para este grupo ainda!");
+        }
+
+        // Resposta com o texto encontrado
+        reply(`*📜 A Tabela de megas do grupo:* \n\n${resultado} \n\nPara ver as formas de pagamento digite: *.pagamento*`);
+        break;
+    switch (removeAccentsAndSpecialCharacters(command?.toLowerCase())) {
+    case "defp":
+        console.log("Comando setpagamento detectado.");
+        
+        // Verificar se o usuário é ADM
+        if (!(await isAdmin(userJid))) {
+            throw new DangerError("Você não tem permissão para executar este comando!");
+        }
+
+        // Verificar se o comando contém o texto a ser salvo
+        if (!args.length) {
+            return reply("❌ Uso correto: setpagamento <informação>");
+        }
+
+        // Salvar o pagamento para o grupo específico
+        const grupoIdSet = from; // ID do grupo atual
+        const conteudoTexto = args.join(" "); // Texto completo fornecido pelo usuário
+
+        // Salva ou atualiza o pagamento no arquivo
+        salvarPagamento(grupoIdSet, conteudoTexto);
+
+        // Resposta de confirmação
+        reply("✅ O pagamento foi *salvo* com sucesso, Senhor!");
+        break;
+        case "pagamento":
+        console.log("Comando pagamento detectado.");
+        
+        // Obter o ID do grupo atual
+        const grupoIdPagamento = from;
+
+        // Obter o pagamento salvo para o grupo atual
+        const resultado = obterPagamento(grupoIdPagamento);
+
+        if (!resultado) {
+            return reply("❌ Nenhuma informação de pagamento foi definida para este grupo ainda!");
+        }
+
+        // Resposta com a informação encontrada
+        reply(`*💰 Confira:* \n\n${resultado}`);
+        break;
+
+    default:
+        console.log("Comando não reconhecido:", command);
+}
       case "ban":
       case "banir":
       case "kick":
